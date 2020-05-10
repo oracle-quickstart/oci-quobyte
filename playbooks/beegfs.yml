@@ -1,0 +1,106 @@
+# tasks/hosts.yml
+
+- hosts: management
+  become: true
+  pre_tasks:
+   - setup:
+      gather_subset:
+        - '!all'
+        - '!any'
+        - 'network'
+  tasks:
+  - name: Disable SELinux
+    selinux:
+      state: disabled
+  - name: stop firewalld
+    service:
+      name: firewalld
+      state: stopped
+      enabled: no
+    async: 30
+    poll: 0
+  - name: create install_management.sh file
+    template:
+      src: _install_management.sh.j2
+      dest: /home/opc/install_management.sh
+  - name: execute_management_install_script
+    command: bash -c "chmod +x /home/opc/*.sh ; sudo /home/opc/install_management.sh"
+
+- hosts: metadata
+  become: true
+  pre_tasks:
+   - setup:
+      gather_subset:
+        - '!all'
+        - '!any'
+        - 'network'
+  tasks:
+  - name: Disable SELinux
+    selinux:
+      state: disabled
+  - name: stop firewalld
+    service:
+      name: firewalld
+      state: stopped
+      enabled: no
+    async: 30
+    poll: 0
+  - name: create install_metadata.sh file
+    template:
+      src: _install_metadata.sh.j2
+      dest: /home/opc/install_metadata.sh
+  - name: execute_metadata_install_script
+    command: bash -c "chmod +x /home/opc/*.sh ; sudo /home/opc/install_metadata.sh"
+
+- hosts: storage
+  become: true
+  pre_tasks:
+   - setup:
+      gather_subset:
+        - '!all'
+        - '!any'
+        - 'network'
+  tasks:
+  - name: Disable SELinux
+    selinux:
+      state: disabled
+  - name: stop firewalld
+    service:
+      name: firewalld
+      state: stopped
+      enabled: no
+    async: 30
+    poll: 0
+  - name: create install_storage.sh file
+    template:
+      src: _install_storage.sh.j2
+      dest: /home/opc/install_storage.sh
+  - name: execute_storage_install_script
+    command: bash -c "chmod +x /home/opc/*.sh ; sudo /home/opc/install_storage.sh"
+
+- hosts: compute
+  become: true
+  pre_tasks:
+   - setup:
+      gather_subset:
+        - '!all'
+        - '!any'
+        - 'network'
+  tasks:
+  - name: Disable SELinux
+    selinux:
+      state: disabled
+  - name: stop firewalld
+    service:
+      name: firewalld
+      state: stopped
+      enabled: no
+    async: 30
+    poll: 0
+  - name: create install_client.sh file
+    template:
+      src: _install_client.sh.j2
+      dest: /home/opc/install_client.sh
+  - name: execute_client_install_script
+    command: bash -c "chmod +x /home/opc/*.sh ; sudo /home/opc/install_client.sh"
+

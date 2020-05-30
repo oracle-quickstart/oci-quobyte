@@ -51,7 +51,7 @@
       mode: 0600
 
 
-- hosts: storage
+- hosts: cluster
   gather_facts: True
   become: true
   tasks: 
@@ -66,42 +66,6 @@
       dest: /home/opc/update_resolv_conf.sh
   - name: execute update_resolv_conf.sh
     command: bash -c "chmod +x /home/opc/*.sh ; sudo /home/opc/update_resolv_conf.sh"
-
-- hosts: metadata
-  gather_facts: True
-  become: true
-  tasks:
-  - name: Update /etc/oci-hostname.conf
-    lineinfile:
-      path: /etc/oci-hostname.conf
-      regexp: '^PRESERVE_HOSTINFO=0'
-      line: 'PRESERVE_HOSTINFO=2'
-  - name: Update /etc/resolv.conf
-    template:
-      src: _update_resolv_conf.sh.j2
-      dest: /home/opc/update_resolv_conf.sh
-  - name: execute update_resolv_conf.sh
-    command: bash -c "chmod +x /home/opc/*.sh ; sudo /home/opc/update_resolv_conf.sh"
-
-- hosts: management
-  gather_facts: True
-  become: true
-  tasks:
-  - name: Update /etc/oci-hostname.conf
-    lineinfile:
-      path: /etc/oci-hostname.conf
-      regexp: '^PRESERVE_HOSTINFO=0'
-      line: 'PRESERVE_HOSTINFO=2'
-  - name: Update /etc/resolv.conf
-    template:
-      src: _update_resolv_conf.sh.j2
-      dest: /home/opc/update_resolv_conf.sh
-  - name: execute update_resolv_conf.sh
-    command: bash -c "chmod +x /home/opc/*.sh ; sudo /home/opc/update_resolv_conf.sh"
-
-- import_playbook: beegfs.yml
-  when:
-    - fs_name == "BeeGFS"
 
 
 - hosts: compute
@@ -119,3 +83,6 @@
       dest: /home/opc/update_etc_hosts.sh
   - name: execute update_etc_hosts.sh
     command: bash -c "chmod +x /home/opc/*.sh ; sudo /home/opc/update_etc_hosts.sh"
+
+
+- import_playbook: install-quobyte-oc.yaml

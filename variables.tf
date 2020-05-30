@@ -6,7 +6,7 @@
 variable "vpc_cidr" { default = "10.0.0.0/16" }
 
 
-variable "fs_name" { default = "BeeGFS" }
+variable "fs_name" { default = "quobyte" }
 # Scratch or Persistent
 variable "fs_type" { default = "Persistent" }
 # Valid values:  Large Files, Small Files,  Mixed.  Select Mixed, if your workload generates a lot of Small files and Large files and you want to optimize filesystem cluster for both.  Small Files (Random IO),  Large Files (Sequential IO).
@@ -18,50 +18,24 @@ variable bastion_node_count { default = 1 }
 variable bastion_hostname_prefix { default = "bastion-" }
 
 
-# DO NOT CHANGE - Management Server settings. If required, you can change shape to another Standard Compute shape.  
-# Management (MGS) Server nodes variables VM.Standard2.2 / VM.DenseIO2.8
-variable management_server_shape { default = "VM.Standard2.2" }
-variable management_server_node_count { default = 1 }
-variable management_server_disk_count { default = 1 }
-variable management_server_disk_size { default = 50 }
-# Block volume elastic performance tier. See https://docs.cloud.oracle.com/en-us/iaas/Content/Block/Concepts/blockvolumeelasticperformance.htm for more information.
-variable management_server_disk_perf_tier { default = "Balanced" }
-variable management_server_hostname_prefix { default = "mgs-server-" }
 
-
-
-# BeeGFS Metadata (MDS) Server nodes variables
-variable persistent_metadata_server_shape { default = "VM.DenseIO2.16" }
-variable scratch_metadata_server_shape { default = "VM.DenseIO2.16" }
-# variable metadata_server_shape { default = "" }
-variable metadata_server_node_count { default = 2 }
-# if disk_count > 1, then it create multiple MDS instance, each with 1 disk as MDT for optimal performance. If node has both local nvme ssd and block storage, block storage volumes will be ignored.
-variable metadata_server_disk_count { default = 4 }
-variable metadata_server_disk_size { default = 50 }
-# Block volume elastic performance tier. See https://docs.cloud.oracle.com/en-us/iaas/Content/Block/Concepts/blockvolumeelasticperformance.htm for more information.
-variable metadata_server_disk_perf_tier { default = "Higher Performance" }
-variable metadata_server_hostname_prefix { default = "metadata-server-" }
-
-
-
-# BeeGFS Stoarage/Object (OSS) Server nodes variables
+#  Storage Server nodes variables
 variable persistent_storage_server_shape { default = "VM.DenseIO2.16" }
 variable scratch_storage_server_shape { default = "VM.DenseIO2.16" }
 #variable storage_server_shape { default = "" }
 variable storage_server_node_count { default = 4 }
 variable storage_server_hostname_prefix { default = "storage-server-" }
 
-# Client nodes variables
-variable client_node_shape { default = "VM.Standard2.2" }
-variable client_node_count { default = 2 }
-variable client_node_hostname_prefix { default = "client-" }
-
+# Compute nodes variables
+variable compute_node_shape { default = "VM.Standard2.2" }
+variable compute_node_count { default = 2 }
+variable compute_node_hostname_prefix { default = "compute-" }
 
 
 # FS related variables
 # Default file stripe size (aka chunk_size) used by clients to striping file data and send to desired number of storage targets (OSTs). Example: 1m, 512k, 2m, etc
 variable stripe_size { default = "1m" }
-variable mount_point { default = "/mnt/fs" }
+variable mount_point { default = "/quobyte" }
 
 
 # This is currently used for the deployment.  
@@ -76,7 +50,7 @@ variable "storage_tier_1_disk_perf_tier" {
 }
 
 variable "storage_tier_1_disk_count" {
-  default = "8"
+  default = "4"
   description = "Number of block volume disk per file server. Each attached as JBOD (no RAID)."
 }
 
@@ -107,17 +81,11 @@ variable "ssh_user" { default = "opc" }
 
 
 locals {
-  management_server_dual_nics = (length(regexall("^BM", var.management_server_shape)) > 0 ? true : false)
-  metadata_server_dual_nics = (length(regexall("^BM", local.derived_metadata_server_shape)) > 0 ? true : false)
   storage_server_dual_nics = (length(regexall("^BM", local.derived_storage_server_shape)) > 0 ? true : false)
   storage_server_hpc_shape = (length(regexall("HPC2", local.derived_storage_server_shape)) > 0 ? true : false)
-  metadata_server_hpc_shape = (length(regexall("HPC2", local.derived_metadata_server_shape)) > 0 ? true : false)
-  management_server_hpc_shape = (length(regexall("HPC2", var.management_server_shape)) > 0 ? true : false)
   storage_subnet_domain_name="${data.oci_core_subnet.private_storage_subnet.dns_label}.${data.oci_core_vcn.quobyte.dns_label}.oraclevcn.com"
   filesystem_subnet_domain_name="${data.oci_core_subnet.private_fs_subnet.dns_label}.${data.oci_core_vcn.quobyte.dns_label}.oraclevcn.com"
   vcn_domain_name="${data.oci_core_vcn.quobyte.dns_label}.oraclevcn.com"
-  management_server_filesystem_vnic_hostname_prefix = "${var.management_server_hostname_prefix}fs-vnic-"
-  metadata_server_filesystem_vnic_hostname_prefix = "${var.metadata_server_hostname_prefix}fs-vnic-"
   storage_server_filesystem_vnic_hostname_prefix = "${var.storage_server_hostname_prefix}fs-vnic-"
 
   # If ad_number is non-negative use it for AD lookup, else use ad_name.
@@ -128,7 +96,7 @@ locals {
 }
 
 
-variable "images" {
+variable "imagesCentos" {
   type = map(string)
   default = {
     // https://docs.cloud.oracle.com/iaas/images/image/96ad11d8-2a4f-4154-b128-4d4510756983/
@@ -144,8 +112,7 @@ variable "images" {
 // See https://docs.cloud.oracle.com/en-us/iaas/images/image/0a72692a-bdbb-46fc-b17b-6e0a3fedeb23/
 // Oracle-provided image "Oracle-Linux-7.7-2020.01.28-0"
 // Kernel Version: 4.14.35-1902.10.4.el7uek.x86_64
-/*
-variable "imagesOL" {
+variable "images" {
   type = "map"
   default = {
     ap-melbourne-1 = "ocid1.image.oc1.ap-melbourne-1.aaaaaaaa3fvafraincszwi36zv2oeangeitnnj7svuqjbm2agz3zxhzozadq"
@@ -168,7 +135,7 @@ variable "imagesOL" {
     us-phoenix-1 = "ocid1.image.oc1.phx.aaaaaaaamff6sipozlita6555ypo5uyqo2udhjqwtrml2trogi6vnpgvet5q"
   }
 }
-*/
+
 
 
 # Not used for normal terraform apply, added for ORM deployments.
@@ -229,7 +196,7 @@ variable "volume_type_vpus_per_gb_mapping" {
 
 #-------------------------------------------------------------------------------------------------------------
 # Marketplace variables
-# hpc-filesystem-BeeGFS-OL77_3.10.0-1062.9.1.el7.x86_64
+# hpc-filesystem-BxxxFS-OL77_3.10.0-1062.9.1.el7.x86_64
 # ------------------------------------------------------------------------------------------------------------
 
 variable "mp_listing_id" {
@@ -275,28 +242,12 @@ variable "create_compute_nodes" {
 }
 
 
+
 #-------------------------------------------------------------------------------------------------------------
-# GlusterFS variables
+# Quobyte variables
 # ------------------------------------------------------------------------------------------------------------
+# Sign-up for Quobyte to get trial license or if you already have a license,  enter your repo_id here.
+# https://www.quobyte.com/signup
+variable repo_id { default = "FTSUx9VMUtNUTQJB7AGf0cjaDhrT27HH" }
 
-# Valid values "5.9" , "3.12" on Oracle Linux Operating System
-variable gluster_version { default = "5.9" }
-# valid values are Distributed, Dispersed , DistributedDispersed, DistributedReplicated, Replicated
-variable gluster_volume_types { default = "Distributed" }
-# replica field used only when VolumeTypes is "Replicated" or "DistributedReplicated". Otherwise assume no replication of data (replica=1 means no replication, only 1 copy of data in filesystem.)
-variable gluster_replica { default = 1 }
-# Has to be in Kilobytes only. Mention only numerical value, example 256, not 256K
-variable gluster_block_size { default = "128" }
 
-##variable gluster_mount_point { default = "/glusterfs" }
-
-# Make sure disk_count is a multiplier of num_of_disks_in_brick.  i.e: disk_count/num_of_disks_in_brick = an Integer, eg: disk_count=8,num_of_disks_in_brick=4 (8/4=2).
-variable gluster_server_num_of_disks_in_brick { default = 1 }
-
-variable "gluster_ol_repo_mapping" {
-  type = map(string)
-  default = {
-    "5.9" = "http://yum.oracle.com/repo/OracleLinux/OL7/gluster5/x86_64"
-    "3.12" = "http://yum.oracle.com/repo/OracleLinux/OL7/gluster312/x86_64"
-  }
-}

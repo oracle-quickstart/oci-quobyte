@@ -1,0 +1,122 @@
+
+---
+- hosts: cluster
+  vars_files:
+    - vars/quobyte.yaml
+  become: yes
+  tasks:
+
+    - name: Create quobyte label list
+      shell: lsblk -o name,label |grep quobyte-dev |awk '{print $1}'
+      register: _quobyte_labeled
+
+    - set_fact: f_quobyte_labeled="{{ _quobyte_labeled.stdout_lines }}"
+
+    - name: Create quobyte mountpoint list
+      shell: lsblk -o name,mountpoint |grep quobyte |awk '{print $1}'
+      register: _quobyte_mountpoint
+
+    - set_fact: f_quobyte_mountpoint="{{ _quobyte_mountpoint.stdout_lines }}"
+
+    - name: Stop Quobyte Services
+      shell: pkill -9 -f java && systemctl stop "{{ item }}"
+      with_items:
+        - quobyte-registry
+        - quobyte-metadata
+        - quobyte-data
+        - quobyte-api
+        - quobyte-webconsole
+        - quobyte-s3
+        - quobyte-nfs
+      register: command_result
+      failed_when: "'ERROR' in command_result.stderr"
+      ignore_errors: yes
+
+    - name: Unmount quobyte client mountpoint
+      shell: umount -lf {{ mountpoint }}
+      register: command_result
+      failed_when: "'ERROR' in command_result.stderr"
+      ignore_errors: yes
+
+    - name: Remove packages Centos
+      yum:
+        name: "{{ packages }}"
+        state: absent
+        update_cache: yes
+      vars:
+        packages:
+        - java-11-openjdk
+        - numactl
+        - netdata
+        - quobyte-server
+        - quobyte-client
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+
+    - name: Remove packages Ubuntu
+      apt:
+        name: "{{ packages }}"
+        state: absent
+      vars:
+        packages:
+        - openjdk-11-jre-headless
+        - numactl
+        - netdata
+        - postfix
+        - quobyte-server
+        - quobyte-client  
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+    - name: Uninstall quobyte
+      shell:
+        cmd: ~/install_quobyte uninstall -f
+      ignore_errors: yes
+
+    - name: Unmount quobyte devices
+      shell: umount -lf /var/lib/quobyte/mnt/inspector-*
+      register: command_result
+      failed_when: "'ERROR' in command_result.stderr"
+      ignore_errors: yes
+
+    - name: Disable network tune service
+      service:
+        name: network_tune
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+
+    - name: Clean directories
+      file:
+        path: "{{ item }}"
+        state: absent
+      with_items:
+        - /var/lib/quobyte*
+        - ~/.quobyte
+        - /opt/quobyte*
+        - /usr/lib/systemd/system/quobyte*
+        - /usr/bin/*quobyte*
+        - /usr/sbin/*quobyte* 
+        - /etc/systemd/system/remote-fs.target.wants/quobyte*
+        - /sys/fs/cgroup/systemd/system.slice/var-lib-quobyte-mnt-inspector*
+        - /sys/fs/cgroup/systemd/system.slice/quobyte.mount
+        - /run/lock/quobyte*
+        - /run/udev/links/\x2fdisk\x2fby-label\*quobyte*
+        - /dev/disk/by-label/quobyte-dev
+        - /etc/init.d/network-tune
+        - /etc/systemd/system/network-tune.service
+      ignore_errors: yes
+
+    - name:  Clean labeled devices
+      shell: wipefs -af /dev/{{ item }}
+      with_items:
+        - "{{ f_quobyte_labeled }}"
+
+    - name:  Clean mountpoint devices
+      shell: wipefs -af /dev/{{ item }}
+      with_items:
+        - "{{ f_quobyte_mountpoint }}"
+
+    - name:  Set tuned profile to balanced 
+      shell: tuned-adm profile balanced
+      register: command_result
+      failed_when: "'ERROR' in command_result.stderr"
+      ignore_errors: yes

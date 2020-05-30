@@ -2,17 +2,9 @@
 {% set short_name = hostvars[item]['ansible_fqdn'].split('.') %}
 {{ hostvars[item]['ansible_host'] }}  {{ hostvars[item]['ansible_fqdn'] }} {{ short_name[0] }} bastion 
 {% endfor %}
-{% for item in groups['storage'] %}
+{% for item in groups['cluster'] %}
 {% set short_name = hostvars[item]['ansible_fqdn'].split('.') %}
-{{ hostvars[item]['ansible_host'] }}  {{ hostvars[item]['ansible_fqdn'] }} {{ short_name[0] }} storage-node-{{ loop.index }} storage-node-{{ loop.index }}.local.vcn quobyte-storage-node-{{ loop.index }} quobyte-storage-node-{{ loop.index }}.local.vcn
-{% endfor %}
-{% for item in groups['management'] %}
-{% set short_name = hostvars[item]['ansible_fqdn'].split('.') %}
-{{ hostvars[item]['ansible_host'] }}  {{ hostvars[item]['ansible_fqdn'] }} {{ short_name[0] }} management-node-{{ loop.index }} management-node-{{ loop.index }}.local.vcn quobyte-management-node-{{ loop.index }} quobyte-management-node-{{ loop.index }}.local.vcn
-{% endfor %}
-{% for item in groups['metadata'] %}
-{% set short_name = hostvars[item]['ansible_fqdn'].split('.') %}
-{{ hostvars[item]['ansible_host'] }}  {{ hostvars[item]['ansible_fqdn'] }} {{ short_name[0] }} metadata-node-{{ loop.index }} metadata-node-{{ loop.index }}.local.vcn quobyte-metadata-node-{{ loop.index }} quobyte-metadata-node-{{ loop.index }}.local.vcn
+{{ hostvars[item]['ansible_host'] }}  {{ hostvars[item]['ansible_fqdn'] }} {{ short_name[0] }} cluster-node-{{ loop.index }} cluster-node-{{ loop.index }}.local.vcn quobyte-cluster-node-{{ loop.index }} quobyte-cluster-node-{{ loop.index }}.local.vcn
 {% endfor %}
 {% for item in groups['compute'] %}
 {% set short_name = hostvars[item]['ansible_fqdn'].split('.') %}

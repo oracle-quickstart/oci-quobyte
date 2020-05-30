@@ -5,19 +5,9 @@ data "oci_core_instance" "storage_server" {
   instance_id = element(concat(oci_core_instance.storage_server.*.id, [""]), count.index)
 }
 
-data "oci_core_instance" "metadata_server" {
-  count       = local.derived_metadata_server_node_count
-  instance_id = element(concat(oci_core_instance.metadata_server.*.id, [""]), count.index)
-}
-
-data "oci_core_instance" "management_server" {
-  count       = local.derived_management_server_node_count
-  instance_id = element(concat(oci_core_instance.management_server.*.id, [""]), count.index)
-}
-
-data "oci_core_instance" "client_node" {
-  count       = var.client_node_count
-  instance_id = element(concat(oci_core_instance.client_node.*.id, [""]), count.index)
+data "oci_core_instance" "compute" {
+  count       = var.compute_node_count
+  instance_id = element(concat(oci_core_instance.compute.*.id, [""]), count.index)
 }
 
 
@@ -46,16 +36,32 @@ output "storage_server_private_ips" {
   value = join(" ", oci_core_instance.storage_server.*.private_ip)
 }
 
-output "metadata_server_private_ips" {
-  value = join(" ", oci_core_instance.metadata_server.*.private_ip)
-}
-
-output "management_server_private_ips" {
-  value = join(" ", oci_core_instance.management_server.*.private_ip)
-}
-
 output "compute_private_ips" {
-  value = join(" ", oci_core_instance.client_node.*.private_ip)
+  value = join(" ", oci_core_instance.compute.*.private_ip)
 }
 
 
+
+data "oci_core_vnic" "storage_secondary_vnic" {
+  count   = var.storage_server_node_count
+  vnic_id = "${element(oci_core_vnic_attachment.storage_server_secondary_vnic_attachment.*.vnic_id, count.index)}"
+}
+
+/*
+output "primary_ip_addresses" {
+  value = ["${oci_core_instance.test_instance.public_ip}",
+    "${oci_core_instance.test_instance.private_ip}",
+  ]
+}
+
+output "secondary_public_ip_addresses" {
+  value = ["${data.oci_core_vnic.storage_secondary_vnic.*.public_ip_address}"]
+}
+*/
+output "secondary_private_ip_addresses" {
+  value = ["${data.oci_core_vnic.storage_secondary_vnic.*.private_ip_address}"]
+}
+
+output "secondary_private_ip_addresses_1" {
+  value = join(",", data.oci_core_vnic.storage_secondary_vnic.*.private_ip_address)
+}

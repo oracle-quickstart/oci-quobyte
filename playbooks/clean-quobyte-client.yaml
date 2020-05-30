@@ -1,0 +1,50 @@
+---
+- hosts: compute
+  vars_files:
+    - vars/quobyte.yaml
+  become: yes
+  tasks:
+
+    - name: Remove packages Centos
+      yum:
+        name: "{{ packages }}"
+        state: absent
+        update_cache: yes
+      vars:
+        packages:
+        - numactl
+        - netdata
+        - quobyte-server
+        - quobyte-client
+      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+
+    - name: Remove packages Ubuntu
+      apt:
+        name: "{{ packages }}"
+        state: absent
+      vars:
+        packages:
+        - numactl
+        - netdata
+        - postfix
+        - quobyte-server
+        - quobyte-client
+      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
+
+    - name: Uninstall quobyte
+      shell:
+        cmd: ~/install_quobyte uninstall -f
+      ignore_errors: yes
+
+    - name: Disable network tune service
+      service:
+        name: network_tune
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+
+    - name:  Set tuned profile to balanced
+      shell: tuned-adm profile balanced
+      register: command_result
+      failed_when: "'ERROR' in command_result.stderr"
+      ignore_errors: yes

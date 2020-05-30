@@ -34,19 +34,6 @@ find_cluster_nodes () {
   fi
 }
 
-nodeType="management"
-domainName={{ filesystem_subnet_domain_name }}
-nodeHostnamePrefix={{ management_server_filesystem_vnic_hostname_prefix }}
-nodeCount={{ derived_management_server_node_count }}
-find_cluster_nodes
-update_etc_hosts
-
-nodeType="meta"
-domainName={{ filesystem_subnet_domain_name }}
-nodeHostnamePrefix={{ metadata_server_filesystem_vnic_hostname_prefix }}
-nodeCount={{ derived_metadata_server_node_count }}
-find_cluster_nodes
-update_etc_hosts
 
 nodeType="storage"
 domainName={{ filesystem_subnet_domain_name }}

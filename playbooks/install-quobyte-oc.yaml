@@ -1,0 +1,442 @@
+---
+- hosts: bastion
+  become: yes
+  gather_facts: no
+  tasks:
+
+  - name: create vars/quobyte.yaml file
+    template:
+      src: _quobyte.yaml.j2
+      dest: /home/opc/playbooks/vars/quobyte.yaml
+
+- hosts: cluster[0]
+  vars_files:
+    - vars/quobyte.yaml
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: Generate new QNS id
+      shell: head -c 8 /dev/urandom | base64 | tr -d '/+=' | tr '[:upper:]' '[:lower:]'
+      register: qns_id
+
+    - debug:
+        msg: "QNS id {{hostvars[groups['cluster'][0]].qns_id.stdout}}"
+
+- hosts: cluster
+  vars_files:
+    - vars/quobyte.yaml
+  become: yes
+  tasks:
+
+    - name: Add Quobyte YUM repo
+      yum_repository:
+        name: quobyte
+        description: Quobyte software repo
+        baseurl: https://packages.quobyte.com/repo/3/{{ repo_id }}/rpm/CentOS_7/
+        gpgkey: https://packages.quobyte.com/repo/3/{{ repo_id }}/rpm/CentOS_7/repodata/repomd.xml.key
+
+    - name: Download Quobyte Software for id {{ repo_id }}
+      get_url:
+        url: https://packages.quobyte.com/repo/3/{{ repo_id }}/install_quobyte
+        dest: ~/install_quobyte
+        mode: '0755'
+      tags: packages
+
+    - name: Install required packages
+      yum:
+        name: "{{ packages }}"
+        state: present
+        update_cache: yes
+      vars:
+        packages:
+        - java-11-openjdk
+        - chrony
+        - atop
+        - htop
+        - numactl
+        - xfsprogs
+      tags: packages
+
+    - name: Install Quobyte server
+      yum:
+        name: quobyte-server
+        state: present
+
+    - name: Ensure Chrony is running
+      service:
+        name: chronyd
+        state: started
+        enabled: yes
+      ignore_errors: yes
+      tags: packages
+
+    - name: Stop and Disable Firewalld
+      service:
+        name: firewalld
+        state: stopped
+        enabled: no
+      ignore_errors: yes
+
+    - name: Disable SE Linux
+      shell:
+        cmd: /usr/sbin/setenforce 0
+      register: command_result
+      failed_when: "'ERROR' in command_result.stderr"
+      ignore_errors: yes
+      tags: prep
+
+    - name: Disable SELinux permanently
+      selinux:
+        state: disabled
+      tags: prep
+
+    - name: Remove swaps from fstab
+      lineinfile:
+        dest: /etc/fstab
+        regexp: '^/[\S]+\s+swap\s+swap'
+        state: absent
+      tags: prep
+
+    - name: Disable swap
+      shell:
+        cmd: swapoff -a
+      tags: prep
+
+    - name: Create a list of all devices
+      shell:
+        cmd: lsblk -dn -o NAME,TYPE |grep disk |awk '{print $1}'
+      register: list_all
+      tags: devices
+
+    - set_fact: flist_all="{{ list_all.stdout_lines }}"
+      tags: devices
+
+    - name: Create a list of non empty devices
+      shell:
+        cmd: blkid |awk '{print $1}'|sed 's/://'|sed 's/[0-9]\+$//'|uniq
+      register: list_non_empty
+      tags: devices
+
+    - set_fact: flist_non_empty="{{ list_non_empty.stdout }}"
+      tags: devices
+
+    - set_fact:
+        flist_empty: "{{ list_all.stdout_lines | difference (list_non_empty.stdout) }}"
+      tags: devices
+
+    - name: Create filesystem on empty devices
+      shell: mkfs.xfs -q -f -L quobyte-dev -isize=1024 /dev/{{ item }}
+      with_items:
+        - "{{ flist_empty }}"
+      register: _create_filesystems
+      async: 1200
+      poll: 0
+      ignore_errors: yes
+      tags: devices
+
+    - name: Wait for creation to finish
+      async_status:
+        jid: "{{ item.ansible_job_id }}"
+      register: _jobs1
+      until: _jobs1.finished
+      delay: 5
+      retries: 1000
+      with_items: "{{ _create_filesystems.results }}"
+      ignore_errors: yes
+      tags: devices
+
+    - name: Create quobyte label list
+      shell: lsblk -o name,label |grep quobyte-dev |awk '{print $1}'
+      register: _quobyte_labeled
+      tags: devices
+
+    - set_fact: f_quobyte_labeled="{{ _quobyte_labeled.stdout_lines }}"
+      tags: devices
+    - name: Check number of devices
+      shell:
+        cmd: lsblk -o name,label | grep quobyte-dev | awk '{print $1}'
+      register: _number_devices
+      tags: devices
+
+    - name: Set registry endpoint
+      lineinfile:
+        path: /etc/quobyte/host.cfg
+        regex: '^registry='
+        line: registry={{ hostvars[groups['cluster'][0]].qns_id.stdout }}.myquobyte.net
+
+    - name: Force public IP to internal network for S3
+      lineinfile:
+        path: /etc/quobyte/s3.cfg
+        line: public_ip={{inventory_hostname}}
+
+- hosts: cluster[0]
+  vars_files:
+    - vars/quobyte.yaml
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: Initialize bootstrap device
+      shell: mkdir -p /var/lib/quobyte/devices/quobyte-registry && qbootstrap -y -d /var/lib/quobyte/devices/quobyte-registry
+
+- hosts: cluster[1:4]
+  vars_files:
+    - vars/quobyte.yaml
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: Initialize registry devices
+      shell: mkdir -p /var/lib/quobyte/devices/quobyte-registry && qmkdev -t REGISTRY -d /var/lib/quobyte/devices/quobyte-registry
+
+- hosts: cluster[0:4]
+  vars_files:
+    - vars/quobyte.yaml
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: Force public IP to internal network
+      lineinfile:
+        path: /etc/quobyte/registry.cfg
+        line: public_ip={{inventory_hostname}}
+
+    - name: Configure QNS
+      lineinfile:
+        path: /etc/quobyte/registry.cfg
+        line: qns.id={{ hostvars[groups['cluster'][0]].qns_id.stdout }}
+
+    - name: Start Quobyte registry
+      service:
+        name: quobyte-registry
+        state: started
+        enabled: yes
+
+    - name: Start Quobyte metadata
+      service:
+        name: quobyte-metadata
+        state: started
+        enabled: yes
+
+    - name: Start Quobyte data
+      service:
+        name: quobyte-data
+        state: started
+        enabled: yes
+
+    - name: Start Quobyte API
+      service:
+        name: quobyte-api
+        state: started
+        enabled: yes
+
+    - name: Start Quobyte webconsole
+      service:
+        name: quobyte-webconsole
+        state: started
+        enabled: yes
+
+    - name: Start Quobyte S3
+      service:
+        name: quobyte-s3
+        state: started
+        enabled: yes
+
+- hosts: cluster,!cluster[0:4]
+  vars_files:
+    - vars/quobyte.yaml
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: Start Quobyte metadata
+      service:
+        name: quobyte-metadata
+        state: started
+        enabled: yes
+
+    - name: Start Quobyte data
+      service:
+        name: quobyte-data
+        state: started
+        enabled: yes
+
+    - name: Start Quobyte S3
+      service:
+        name: quobyte-s3
+        state: started
+        enabled: yes
+
+- hosts: cluster[0]
+  vars_files:
+  - vars/quobyte.yaml
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: Wait until api service is ready on first node
+      wait_for:
+        timeout: 600
+        path: /var/log/quobyte/api.log
+        search_regex: "API service is now ready"
+
+- hosts: cluster
+  vars_files:
+    - vars/quobyte.yaml
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: Set Quobyte tuned server profile
+      shell:
+        cmd: tuned-adm profile quobyte-server-performance
+
+    - name: Pick first block device as metadata device
+      shell:
+        cmd: lsblk -o name,label,size,model |grep quobyte-dev |grep "BlockVolume" |awk 'NR==1{print $1}'
+      register: list_m
+
+    - set_fact: flist_m="{{ list_m.stdout_lines }}"
+
+    - name: Pick first nvme as metadata device
+      shell:
+        cmd: lsblk -o name,label,size |grep quobyte-dev |grep "nvme" |awk 'NR==1{print $1}'
+      register: list_m
+
+    - set_fact: flist_m="{{ flist_m + list_m.stdout_lines }}"
+
+    - name: Wait for devices to be mounted
+      wait_for:
+        timeout: 120
+        path: /proc/mounts
+        search_regex: inspector-{{ item }}
+      with_items:
+        - "{{ flist_m }}"
+
+    - name: Create metadata disk
+      shell: qmkdev -t M /var/lib/quobyte/mnt/inspector-{{ item }}
+      with_items:
+        - "{{ flist_m }}"
+
+    - set_fact:
+        flist_d: "{{ flist_empty | difference (flist_m) }}"
+
+    - name: Create Quobyte Data devices
+      shell: qmkdev -t D /var/lib/quobyte/mnt/inspector-{{ item }}
+      with_items:
+        - "{{ flist_d }}"
+      register: _create_data_devices
+      async: 1200
+      poll: 0
+
+    - name: Wait for creation to finish
+      async_status:
+        jid: "{{ item.ansible_job_id }}"
+      register: _jobs3
+      until: _jobs3.finished
+      delay: 5
+      retries: 1000
+      with_items: "{{ _create_data_devices.results }}"
+
+- hosts: cluster[0:4]
+  vars_files:
+  - vars/quobyte.yaml
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: Wait until api service is ready
+      wait_for:
+        timeout: 600
+        path: /var/log/quobyte/api.log
+        search_regex: "API service is now ready"
+
+- hosts: compute
+  vars_files:
+    - vars/quobyte.yaml
+  become: yes
+  gather_facts: yes
+  tasks:
+
+    - name: Download Quobyte Software for id {{ repo_id }}
+      get_url:
+        url: https://packages.quobyte.com/repo/3/{{ repo_id }}/install_quobyte
+        dest: ~/install_quobyte
+        mode: '0755'
+      tags: packages
+
+    - name: Install Quobyte client
+      shell:
+        cmd: ~/install_quobyte add-client --repo-id {{ repo_id }} --qns-id {{ hostvars[groups['cluster'][0]].qns_id.stdout }} --mount-point {{ mountpoint }}
+      tags: client
+
+    - name: Configure quobyte client configuration
+      blockinfile:
+        path: /etc/quobyte/client-service.cfg
+        block: |
+          options=default_permissions
+      tags: tune
+
+- hosts: cluster[0]
+  vars_files:
+  - vars/quobyte.yaml
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: Read systemconfig
+      shell: qmgmt systemconfig export /tmp/quobyte-systemconfig
+
+    - name: Add networks for client and services to systemconfig
+      blockinfile:
+        path: /tmp/quobyte-systemconfig
+        block: |
+          network {
+            enabled_service_networks: "{{ service_network }}"
+            enabled_client_networks: "{{ client_network }}"
+          }
+
+    - name: Load updated systemconfig
+      shell: qmgmt systemconfig import /tmp/quobyte-systemconfig
+
+    - name: Get device list
+      shell:
+        cmd: qmgmt device list | grep DATA | cut -d' ' -f1
+      register: qb_devices
+
+    - name: Identify block devices
+      shell:
+        cmd: qmgmt device show {{ item }} | grep BlockVolume; if [ $? -eq 0 ]; then echo {{ item }} >> /tmp/qbdevs; fi
+      with_items:
+        - "{{ qb_devices.stdout_lines }}"
+
+    - name: Tag block devices
+      shell:
+        cmd: for device in $(cat /tmp/qbdevs); do qmgmt device update add-tags $device cloud-persistent; done
+
+    - name: Copy volume config for persistent storage
+      copy:
+        src: templates/oracle-persistent.cfg
+        dest: /tmp/
+
+    - name: Import volume config for persistent storage
+      shell:
+        cmd: qmgmt volume config import OracleCloud-persistent /tmp/oracle-persistent.cfg
+
+    - name: Copy volume config for scracth storage
+      copy:
+        src: templates/oracle-ephemeral-scratch.cfg
+        dest: /tmp/
+
+    - name: Import volume config for persistent storage
+      shell:
+        cmd: qmgmt volume config import OracleCloud-ephemeral-scratch /tmp/oracle-ephemeral-scratch.cfg
+
+    - name: Create sample volumes
+      shell:
+        cmd: qmgmt volume create demo-scratch root root OracleCloud-ephemeral-scratch
+
+    - name: Create sample volumes
+      shell:
+        cmd: qmgmt volume create demo-persistent root root OracleCloud-persistent

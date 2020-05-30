@@ -3,11 +3,12 @@
   become: yes
   gather_facts: no
   tasks:
-
-  - name: create vars/quobyte.yaml file
-    template:
-      src: _quobyte.yaml.j2
-      dest: /home/opc/playbooks/vars/quobyte.yaml
+    - name: create /home/opc/playbooks/vars directory
+      shell: mkdir -p /home/opc/playbooks/vars
+    - name: create vars/quobyte.yaml file
+      template:
+        src: _quobyte.yaml.j2
+        dest: /home/opc/playbooks/vars/quobyte.yaml
 
 - hosts: cluster[0]
   vars_files:

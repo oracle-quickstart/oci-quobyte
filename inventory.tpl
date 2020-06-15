@@ -1,5 +1,9 @@
 [bastion]
 ${bastion_name} ansible_host=${bastion_ip} ansible_user=opc role=bastion
+[storage]
+%{ for host, ip in storage ~}
+${host} ansible_host=${ip} ansible_user=opc role=storage
+%{ endfor ~}
 [cluster]
 %{ for host, ip in cluster ~}
 ${host} ansible_host=${ip} ansible_user=opc role=cluster
@@ -10,6 +14,7 @@ ${host} ansible_host=${ip} ansible_user=opc role=compute
 %{ endfor ~}
 [all:children]
 bastion
+storage
 cluster
 compute
 [all:vars]

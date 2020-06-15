@@ -47,6 +47,7 @@ data "oci_core_vnic" "storage_secondary_vnic" {
   vnic_id = "${element(oci_core_vnic_attachment.storage_server_secondary_vnic_attachment.*.vnic_id, count.index)}"
 }
 
+
 /*
 output "primary_ip_addresses" {
   value = ["${oci_core_instance.test_instance.public_ip}",

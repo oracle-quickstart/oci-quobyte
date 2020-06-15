@@ -9,7 +9,7 @@
 
 {% endfor %}
 
-{% for item in groups['cluster'] %}
+{% for item in groups['storage'] %}
 
 	{% set short_name = hostvars[item]['ansible_fqdn'].split('.') %}
 	{% set key = hostvars[item]['ansible_ssh_host_key_ecdsa_public'] %}
@@ -17,12 +17,12 @@
 	{{ hostvars[item]['ansible_host'] }} ecdsa-sha2-nistp256 {{ key }} 
 	{{ short_name[0] }} ecdsa-sha2-nistp256 {{ key }}
 
-	cluster-node-{{ number }} ecdsa-sha2-nistp256 {{ key }}
-	cluster-node-{{ number }}-rdma ecdsa-sha2-nistp256 {{ key }}
-	cluster-node-{{ number }}.local.vcn ecdsa-sha2-nistp256 {{ key }}
+	storage-node-{{ number }} ecdsa-sha2-nistp256 {{ key }}
+	storage-node-{{ number }}-rdma ecdsa-sha2-nistp256 {{ key }}
+	storage-node-{{ number }}.local.vcn ecdsa-sha2-nistp256 {{ key }}
 	{{ hostvars[item]['ansible_fqdn'] }} ecdsa-sha2-nistp256 {{ key }}
-	quobyte-cluster-node-{{ number }}.local.vcn ecdsa-sha2-nistp256 {{ key }}
-	quobyte-cluster-node-{{ number }} ecdsa-sha2-nistp256 {{ key }}
+	quobyte-storage-node-{{ number }}.local.vcn ecdsa-sha2-nistp256 {{ key }}
+	quobyte-storage-node-{{ number }} ecdsa-sha2-nistp256 {{ key }}
 
 {% endfor %}
 

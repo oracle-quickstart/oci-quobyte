@@ -1,6 +1,6 @@
-# tasks/hosts.yml
-
-- hosts: all 
+## tasks/hosts.yml
+# bastion,storage,compute
+- hosts: all,!cluster
   become: true
   pre_tasks:
    - setup:
@@ -51,7 +51,7 @@
       mode: 0600
 
 
-- hosts: cluster
+- hosts: storage
   gather_facts: True
   become: true
   tasks: 
@@ -84,5 +84,5 @@
   - name: execute update_etc_hosts.sh
     command: bash -c "chmod +x /home/opc/*.sh ; sudo /home/opc/update_etc_hosts.sh"
 
-
+- import_playbook: configure_nodes.yml
 - import_playbook: install-quobyte-oc.yaml

@@ -47,7 +47,7 @@ sed -i 's/^forks.*/forks = 128/' /etc/ansible/ansible.cfg
 
 #
 if [[ $execution -eq 1 ]] ; then
-  ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -v /home/opc/playbooks/site.yml -i /home/opc/playbooks/inventory
+  ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook  /home/opc/playbooks/site.yml -i /home/opc/playbooks/inventory
 else
 
 	cat <<- EOF > /etc/motd

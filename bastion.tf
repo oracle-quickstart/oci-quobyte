@@ -58,7 +58,8 @@ resource "oci_core_instance" "bastion" {
     content        = templatefile("${path.module}/inventory.tpl", {  
       bastion_name = oci_core_instance.bastion[0].display_name,
       bastion_ip = oci_core_instance.bastion[0].private_ip,
-      cluster = zipmap(data.oci_core_instance.storage_server.*.display_name, data.oci_core_instance.storage_server.*.private_ip),
+      storage = zipmap(data.oci_core_instance.storage_server.*.display_name, data.oci_core_instance.storage_server.*.private_ip),
+      cluster = zipmap(data.oci_core_vnic.storage_secondary_vnic.*.display_name, data.oci_core_vnic.storage_secondary_vnic.*.private_ip_address),
       compute = zipmap(data.oci_core_instance.compute.*.display_name, data.oci_core_instance.compute.*.private_ip),
       fs_name = var.fs_name,
       fs_type = var.fs_type,
@@ -112,7 +113,7 @@ resource "oci_core_instance" "bastion" {
   }
 
   provisioner "file" {
-    content     = join("\n", data.oci_core_instance.storage_server.*.private_ip)
+    content     = join("\n", data.oci_core_instance.storage_server.*.private_ip, data.oci_core_instance.compute.*.private_ip)
     destination = "/tmp/hosts"
     connection {
       host        = oci_core_instance.bastion[0].public_ip

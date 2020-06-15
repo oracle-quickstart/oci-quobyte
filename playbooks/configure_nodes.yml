@@ -1,0 +1,17 @@
+
+- hosts: storage
+  become: true
+  pre_tasks:
+   - setup:
+      gather_subset:
+        - '!all'
+        - '!any'
+        - 'network'
+  tasks:
+  - name: create install_storage.sh file
+    template:
+      src: _install_storage.sh.j2
+      dest: /home/opc/install_storage.sh
+  - name: execute_storage_install_script
+    command: bash -c "chmod +x /home/opc/*.sh ; sudo /home/opc/install_storage.sh"
+

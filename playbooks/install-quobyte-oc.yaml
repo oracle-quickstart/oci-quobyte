@@ -171,26 +171,6 @@
         path: /etc/quobyte/s3.cfg
         line: public_ip={{inventory_hostname}}
 
-- hosts: cluster[0]
-  vars_files:
-    - vars/quobyte.yaml
-  become: yes
-  gather_facts: no
-  tasks:
-
-    - name: Initialize bootstrap device
-      shell: mkdir -p /var/lib/quobyte/devices/quobyte-registry && qbootstrap -y -d /var/lib/quobyte/devices/quobyte-registry
-
-- hosts: cluster[1:4]
-  vars_files:
-    - vars/quobyte.yaml
-  become: yes
-  gather_facts: no
-  tasks:
-
-    - name: Initialize registry devices
-      shell: mkdir -p /var/lib/quobyte/devices/quobyte-registry && qmkdev -t REGISTRY -d /var/lib/quobyte/devices/quobyte-registry
-
 - hosts: cluster[0:4]
   vars_files:
     - vars/quobyte.yaml
@@ -208,11 +188,74 @@
         path: /etc/quobyte/registry.cfg
         line: qns.id={{ hostvars[groups['cluster'][0]].qns_id.stdout }}
 
+- hosts: cluster[0]
+  vars_files:
+    - vars/quobyte.yaml
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: Initialize bootstrap device
+      shell: mkdir -p /var/lib/quobyte/devices/quobyte-registry && qbootstrap -y -d /var/lib/quobyte/devices/quobyte-registry
+
     - name: Start Quobyte registry
       service:
         name: quobyte-registry
         state: started
         enabled: yes
+
+    - name: Start Quobyte API
+      service:
+        name: quobyte-api
+        state: started
+        enabled: yes
+
+- hosts: cluster[0]
+  vars_files:
+  - vars/quobyte.yaml
+  become: yes
+  gather_facts: no
+  tasks:
+
+    - name: Wait until api service is ready on first node
+      wait_for:
+        path: /var/log/quobyte/api.log
+        search_regex: "API service is now ready"
+
+- hosts: cluster[1:4]
+  vars_files:
+    - vars/quobyte.yaml
+  become: yes
+  gather_facts: no
+  serial: 1
+  tasks:
+
+    - name: Initialize registry devices
+      shell: mkdir -p /var/lib/quobyte/devices/quobyte-registry && qmkdev -t REGISTRY -d /var/lib/quobyte/devices/quobyte-registry
+
+    - name: Start Quobyte registry
+      service:
+        name: quobyte-registry
+        state: started
+        enabled: yes
+
+    - name: Start Quobyte API
+      service:
+        name: quobyte-api
+        state: started
+        enabled: yes
+
+    - name: Waiting for registries to come up
+      wait_for:
+        path: /var/log/quobyte/registry.log
+        search_regex: REGISTRY service is now ready
+
+- hosts: cluster[0:4]
+  vars_files:
+   - vars/quobyte.yaml
+  become: yes
+  gather_facts: no
+  tasks:
 
     - name: Start Quobyte metadata
       service:
@@ -223,12 +266,6 @@
     - name: Start Quobyte data
       service:
         name: quobyte-data
-        state: started
-        enabled: yes
-
-    - name: Start Quobyte API
-      service:
-        name: quobyte-api
         state: started
         enabled: yes
 
@@ -268,19 +305,6 @@
         name: quobyte-s3
         state: started
         enabled: yes
-
-- hosts: cluster[0]
-  vars_files:
-  - vars/quobyte.yaml
-  become: yes
-  gather_facts: no
-  tasks:
-
-    - name: Wait until api service is ready on first node
-      wait_for:
-        timeout: 600
-        path: /var/log/quobyte/api.log
-        search_regex: "API service is now ready"
 
 - hosts: cluster
   vars_files:
@@ -349,7 +373,6 @@
 
     - name: Wait until api service is ready
       wait_for:
-        timeout: 600
         path: /var/log/quobyte/api.log
         search_regex: "API service is now ready"
 
@@ -436,8 +459,8 @@
 
     - name: Create sample volumes
       shell:
-        cmd: qmgmt volume create demo-scratch root root OracleCloud-ephemeral-scratch
+        cmd: qmgmt volume create demo-scratch root root OracleCloud-ephemeral-scratch 0777
 
     - name: Create sample volumes
       shell:
-        cmd: qmgmt volume create demo-persistent root root OracleCloud-persistent
+        cmd: qmgmt volume create demo-persistent root root OracleCloud-persistent 0777

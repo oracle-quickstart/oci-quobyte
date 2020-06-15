@@ -12,6 +12,7 @@ Deploy [Quobyte file system](https://www.quobyte.com) on Oracle Cloud Infrastruc
 
 ## High Level Architecture
 Given below is the high level architecture. 
+
 ![](./images/01-arch.png)
 
 

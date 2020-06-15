@@ -24,4 +24,6 @@ END
 }
 
 
-
+output "secondary_private_ip_addresses" {
+  value = join(",", data.oci_core_vnic.storage_secondary_vnic.*.private_ip_address)
+}

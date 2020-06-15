@@ -48,21 +48,3 @@ data "oci_core_vnic" "storage_secondary_vnic" {
 }
 
 
-/*
-output "primary_ip_addresses" {
-  value = ["${oci_core_instance.test_instance.public_ip}",
-    "${oci_core_instance.test_instance.private_ip}",
-  ]
-}
-
-output "secondary_public_ip_addresses" {
-  value = ["${data.oci_core_vnic.storage_secondary_vnic.*.public_ip_address}"]
-}
-*/
-output "secondary_private_ip_addresses" {
-  value = ["${data.oci_core_vnic.storage_secondary_vnic.*.private_ip_address}"]
-}
-
-output "secondary_private_ip_addresses_1" {
-  value = join(",", data.oci_core_vnic.storage_secondary_vnic.*.private_ip_address)
-}

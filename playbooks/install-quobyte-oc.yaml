@@ -438,6 +438,7 @@
     - name: Tag block devices
       shell:
         cmd: for device in $(cat /tmp/qbdevs); do qmgmt device update add-tags $device cloud-persistent; done
+      ignore_errors: yes
 
     - name: Copy volume config for persistent storage
       copy:

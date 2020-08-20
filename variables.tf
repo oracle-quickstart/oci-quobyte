@@ -199,21 +199,20 @@ variable "volume_type_vpus_per_gb_mapping" {
 # hpc-filesystem-BxxxFS-OL77_3.10.0-1062.9.1.el7.x86_64
 # ------------------------------------------------------------------------------------------------------------
 
-variable "mp_listing_id" {
-  default = "ocid1.appcataloglisting.oc1..aaaaaaaajmdokvtzailtlchqxk7nai45fxar6em7dfbdibxmspjsvs4uz3uq"
-}
-variable "mp_listing_resource_id" {
-  default = "ocid1.image.oc1..aaaaaaaacnodhlnuidkvnlvu3dpu4n26knkqudjxzfpq3vexi7cobbclmbxa"
-}
-variable "mp_listing_resource_version" {
- default = "1.0"
-}
+#variable "mp_listing_id" { default = "ocid1.appcataloglisting.oc1..aaaaaaaajmdokvtzailtlchqxk7nai45fxar6em7dfbdibxmspjsvs4uz3uq" }
+#variable "mp_listing_resource_id" { default = "ocid1.image.oc1..aaaaaaaacnodhlnuidkvnlvu3dpu4n26knkqudjxzfpq3vexi7cobbclmbxa" }
+#variable "mp_listing_resource_version" { default = "1.0" }
 
-variable "use_marketplace_image" {
-  default = true
-}
+variable "use_marketplace_image" { default = true }
 
 # ------------------------------------------------------------------------------------------------------------
+
+
+
+variable "mp_listing_id" { default = "ocid1.appcataloglisting.oc1..aaaaaaaa2tsjrt6vdjvz6gz476fgq7cr2x5f2gskesjt4i2ocec56me4o65q" }
+variable "mp_listing_resource_version" { default = "Oracle-Linux-8.1-2019.12.09-0" }
+
+variable "mp_listing_resource_id" { default = "ocid1.image.oc1..aaaaaaaaoydld6bwi3l6ux4qxqwa6ue3q562tq5yxn4yi3yng3wvhnmhs6jq" }
 
 
 

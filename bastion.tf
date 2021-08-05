@@ -42,6 +42,9 @@ resource "oci_core_instance" "bastion" {
     network_type = "VFIO"
   }
 
+  agent_config {
+    is_management_disabled = true
+  }
 
   provisioner "file" {
     source        = "playbooks"
@@ -203,6 +206,10 @@ resource "oci_core_instance" "storage_server" {
     network_type = "VFIO"
   }
 
+  agent_config {
+    is_management_disabled = true
+  }
+  
   metadata = {
     ssh_authorized_keys = join(
       "\n",
@@ -244,6 +251,10 @@ resource "oci_core_instance" "compute" {
 
   launch_options {
     network_type = "VFIO"
+  }
+
+  agent_config {
+    is_management_disabled = true
   }
 
   metadata = {

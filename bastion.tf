@@ -6,7 +6,6 @@ resource "tls_private_key" "ssh" {
 
 locals {
   bastion_subnet_id = var.use_existing_vcn ? var.bastion_subnet_id : element(concat(oci_core_subnet.public.*.id, [""]), 0)
-  image_id          = (var.use_marketplace_image ? var.mp_listing_resource_id : var.images[var.region])
   compute_subnet_id  = var.use_existing_vcn ? var.fs_subnet_id : element(concat(oci_core_subnet.fs.*.id, [""]), 0)
 }
 
@@ -34,14 +33,25 @@ resource "oci_core_instance" "bastion" {
   source_details {
     source_id   = local.image_id
     source_type = "image"
+    boot_volume_size_in_gbs = var.bastion_boot_volume_size
   }
   create_vnic_details {
     subnet_id = local.bastion_subnet_id
+    hostname_label      = "${var.bastion_hostname_prefix}${format("%01d", count.index+1)}"
+
   }
+    
+  /*
   launch_options {
     network_type = "VFIO"
   }
-
+  */
+  dynamic "shape_config" {
+    for_each = local.is_bastion_flex_shape
+      content {
+        ocpus = shape_config.value
+      }
+  }
   agent_config {
     is_management_disabled = true
   }
@@ -193,19 +203,36 @@ resource "oci_core_instance" "storage_server" {
   #fault_domain        = "FAULT-DOMAIN-${(count.index%3)+1}"
   compartment_id      = var.compartment_ocid
   display_name        = "${var.storage_server_hostname_prefix}${format("%01d", count.index+1)}"
-  hostname_label      = "${var.storage_server_hostname_prefix}${format("%01d", count.index+1)}"
   shape               = local.derived_storage_server_shape
-  subnet_id           = local.storage_subnet_id
 
   source_details {
     source_type = "image"
     source_id   = local.image_id
+    boot_volume_size_in_gbs = var.storage_server_boot_volume_size
   }
 
+  create_vnic_details {
+    subnet_id           = local.storage_subnet_id
+    hostname_label      = "${var.storage_server_hostname_prefix}${format("%01d", count.index+1)}"
+    assign_public_ip    = "false"
+  }
+  
+  launch_options {
+    network_type = local.server_network_type
+  }
+/*
   launch_options {
     network_type = "VFIO"
   }
-
+*/
+  dynamic "shape_config" {
+    for_each = local.is_storage_server_flex_shape
+      content {
+        ocpus = shape_config.value
+        memory_in_gbs = var.storage_server_custom_memory ? var.storage_server_memory : 16 * shape_config.value
+      }
+  }
+  
   agent_config {
     is_management_disabled = true
   }
@@ -240,19 +267,38 @@ resource "oci_core_instance" "compute" {
   #fault_domain        = "FAULT-DOMAIN-${(count.index%3)+1}"
   compartment_id      = var.compartment_ocid
   display_name        = "${var.compute_node_hostname_prefix}${format("%01d", count.index+1)}"
-  hostname_label      = "${var.compute_node_hostname_prefix}${format("%01d", count.index+1)}"
+  #hostname_label      = "${var.compute_node_hostname_prefix}${format("%01d", count.index+1)}"
   shape               = var.compute_node_shape
-  subnet_id           = local.compute_subnet_id
+  #subnet_id           = local.compute_subnet_id
 
   source_details {
     source_type = "image"
     source_id   = local.image_id
   }
 
+  create_vnic_details {
+    subnet_id           = local.compute_subnet_id
+    hostname_label      = "${var.compute_node_hostname_prefix}${format("%01d", count.index+1)}"
+    assign_public_ip    = "false"
+  }
+
+  launch_options {
+    network_type = local.compute_network_type
+  }
+
+  /*
   launch_options {
     network_type = "VFIO"
   }
+  */
 
+  dynamic "shape_config" {
+    for_each = local.is_compute_node_flex_shape
+      content {
+        ocpus = shape_config.value
+      }
+  }
+  
   agent_config {
     is_management_disabled = true
   }

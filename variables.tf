@@ -14,20 +14,32 @@ variable "fs_workload_type" { default = "Large Files" }
 
 
 variable bastion_shape { default = "VM.Standard2.2" }
+# Number of OCPU's for flex shape, otherwise ignore the variable
+variable bastion_ocpus { default = "1" }
 variable bastion_node_count { default = 1 }
 variable bastion_hostname_prefix { default = "bastion-" }
+# min 50GB, For Production, recommend sizing it based on what else u plan to run on the node.
+variable bastion_boot_volume_size { default = "50" }
 
 
 
 #  Storage Server nodes variables
 variable persistent_storage_server_shape { default = "VM.DenseIO2.16" }
+# Number of OCPU's for flex shape, otherwise ignore the variable
+variable storage_server_ocpus { default = "2" }
+variable storage_server_memory { default = 16 }
+variable storage_server_custom_memory { default = false }
 variable scratch_storage_server_shape { default = "VM.DenseIO2.16" }
 #variable storage_server_shape { default = "" }
 variable storage_server_node_count { default = 4 }
 variable storage_server_hostname_prefix { default = "storage-server-" }
+# Recommend using 200-300 GB in production to ensure there is enough space for logs.
+variable storage_server_boot_volume_size { default = "300" }
 
 # Compute nodes variables
 variable compute_node_shape { default = "VM.Standard2.2" }
+# Number of OCPU's for flex shape, otherwise ignore the variable
+variable compute_node_ocpus { default = "1" }
 variable compute_node_count { default = 2 }
 variable compute_node_hostname_prefix { default = "compute-" }
 
@@ -93,7 +105,40 @@ locals {
   # Use of max() prevents out of index lookup call.
   ad = "${var.ad_number >= 0 ? lookup(data.oci_identity_availability_domains.availability_domains.availability_domains[max(0,var.ad_number)],"name") : var.ad_name}"
 
+  is_bastion_flex_shape = length(regexall(".*VM.*E[3-4].*Flex$", var.bastion_shape)) > 0 ? [var.bastion_ocpus]:[]
+  is_storage_server_flex_shape = length(regexall(".*VM.*E[3-4].*Flex$", var.persistent_storage_server_shape)) > 0 ? [var.storage_server_ocpus]:[]
+  # not used
+  is_compute_node_flex_shape = length(regexall(".*VM.*E[3-4].*Flex$", var.compute_node_shape)) > 0 ? [var.compute_node_ocpus]:[]
+  
+  
+  # https://docs.oracle.com/en-us/iaas/Content/Compute/Tasks/edit-launch-options.htm
+  server_network_type = ( ( (length(regexall("VM.Standard.E2", local.derived_storage_server_shape)) > 0) || (length(regexall("VM.Standard.A1.Flex", local.derived_storage_server_shape)) > 0) ) ? "PARAVIRTUALIZED" : "VFIO")
+
+  compute_network_type = ( ( (length(regexall("VM.Standard.E2", var.compute_node_shape)) > 0) || (length(regexall("VM.Standard.A1.Flex", var.compute_node_shape)) > 0) ) ? "PARAVIRTUALIZED" : "VFIO")
+  
+  # old logic to use static image
+  #image_id          = (var.use_marketplace_image ? var.mp_listing_resource_id : var.images[var.region])
+
+  image_id = (var.use_marketplace_image ? var.mp_listing_resource_id : data.oci_core_images.InstanceImageOCID.images.0.id)
+
+
 }
+
+
+
+# Oracle-Linux-8.3-2021.05.12-0
+# https://docs.oracle.com/en-us/iaas/images/image/4672d9c5-9023-4b13-9021-cd3db35ea486/
+# 5.4.17-2102.201.3.el8uek.x86_64 (UEK R6U2)
+# imagesOL83_UEKR6U2
+variable "images" {
+  type = map(string)
+  default = {
+    us-ashburn-1   = "ocid1.image.oc1.iad.aaaaaaaa66sixgsmhurzb3g7jedimei4wzrsvuqxfteeeesgfsboyqwsb75q"
+    us-phoenix-1   = "ocid1.image.oc1.phx.aaaaaaaa7tahbccrcjw5zrgg3dpjmti7ldaglfvvmk4hgmvp5jf54jwejpiq"
+  }
+}
+
+
 
 
 variable "imagesCentos" {
@@ -112,7 +157,7 @@ variable "imagesCentos" {
 // See https://docs.cloud.oracle.com/en-us/iaas/images/image/0a72692a-bdbb-46fc-b17b-6e0a3fedeb23/
 // Oracle-provided image "Oracle-Linux-7.7-2020.01.28-0"
 // Kernel Version: 4.14.35-1902.10.4.el7uek.x86_64
-variable "images" {
+variable "images1" {
   type = "map"
   default = {
     ap-melbourne-1 = "ocid1.image.oc1.ap-melbourne-1.aaaaaaaa3fvafraincszwi36zv2oeangeitnnj7svuqjbm2agz3zxhzozadq"
@@ -240,6 +285,19 @@ variable "create_compute_nodes" {
   default = "false"
 }
 
+
+variable instance_os {
+    description = "Operating system for compute instances"
+    default = "Oracle Linux"
+}
+
+# Using 7.9 works,  but 8.3 or 7.8 or 8.4 or 7 fails,  if only 8 is set, then it picks the latest 8.x.
+# Only latest supported OS version works. if I use 7.7, it doesn't return an image ocid.
+variable linux_os_version {
+    description = "Operating system version for compute instances except NAT"
+    #default = "8"
+    default = "7.9"
+}
 
 
 #-------------------------------------------------------------------------------------------------------------

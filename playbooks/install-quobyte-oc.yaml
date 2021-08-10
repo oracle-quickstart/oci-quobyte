@@ -34,12 +34,12 @@
       yum_repository:
         name: quobyte
         description: Quobyte software repo
-        baseurl: https://packages.quobyte.com/repo/3/{{ repo_id }}/rpm/CentOS_7/
-        gpgkey: https://packages.quobyte.com/repo/3/{{ repo_id }}/rpm/CentOS_7/repodata/repomd.xml.key
+        baseurl: https://packages.quobyte.com/repo/v3/rpm/RHEL_8/
+        gpgkey: https://packages.quobyte.com/repo/v3/rpm/RHEL_8/repodata/repomd.xml.key
 
     - name: Download Quobyte Software for id {{ repo_id }}
       get_url:
-        url: https://packages.quobyte.com/repo/3/{{ repo_id }}/install_quobyte
+        url: https://packages.quobyte.com/repo/v3/install_quobyte
         dest: ~/install_quobyte
         mode: '0755'
       tags: packages
@@ -53,8 +53,6 @@
         packages:
         - java-11-openjdk
         - chrony
-        - atop
-        - htop
         - numactl
         - xfsprogs
       tags: packages
@@ -63,6 +61,7 @@
       yum:
         name: quobyte-server
         state: present
+        disable_gpg_check: yes
 
     - name: Ensure Chrony is running
       service:
@@ -159,6 +158,12 @@
         cmd: lsblk -o name,label | grep quobyte-dev | awk '{print $1}'
       register: _number_devices
       tags: devices
+
+    - name: Set rotational flag for all devices
+      shell: echo 0 > /sys/block/{{ item }}/queue/rotational
+      with_items:
+        - "{{ f_quobyte_labeled }}"
+
 
     - name: Set registry endpoint
       lineinfile:
@@ -383,24 +388,40 @@
   gather_facts: yes
   tasks:
 
-    - name: Download Quobyte Software for id {{ repo_id }}
-      get_url:
-        url: https://packages.quobyte.com/repo/3/{{ repo_id }}/install_quobyte
-        dest: ~/install_quobyte
-        mode: '0755'
-      tags: packages
+    - name: Add Quobyte YUM repo
+      yum_repository:
+        name: quobyte
+        description: Quobyte software repo
+        baseurl: https://packages.quobyte.com/repo/v3/rpm/RHEL_8/
+        gpgkey: https://packages.quobyte.com/repo/v3/rpm/RHEL_8/repodata/repomd.xml.key
 
-    - name: Install Quobyte client
-      shell:
-        cmd: ~/install_quobyte add-client --repo-id {{ repo_id }} --qns-id {{ hostvars[groups['cluster'][0]].qns_id.stdout }} --mount-point {{ mountpoint }}
-      tags: client
+    - name: Install Quobyte Client
+      yum:
+        name: quobyte-client
+        state: present
+        disable_gpg_check: yes
 
     - name: Configure quobyte client configuration
       blockinfile:
         path: /etc/quobyte/client-service.cfg
         block: |
           options=default_permissions
+          registry={{ hostvars[groups['cluster'][0]].qns_id.stdout }}.myquobyte.net
+          mount_point=/quobyte
       tags: tune
+
+    - name: Create mountpoint
+      file:
+        path: /quobyte
+        state: directory
+     
+    - name: Start Quobyte Client
+      service:
+        name: quobyte-client
+        state: started
+        enabled: yes
+
+
 
 - hosts: cluster[0]
   vars_files:
@@ -440,28 +461,11 @@
         cmd: for device in $(cat /tmp/qbdevs); do qmgmt device update add-tags $device cloud-persistent; done
       ignore_errors: yes
 
-    - name: Copy volume config for persistent storage
+    - name: Copy OCP policies
       copy:
-        src: templates/oracle-persistent.cfg
+        src: templates/policies
         dest: /tmp/
-
-    - name: Import volume config for persistent storage
+    
+    - name: Load OCP policies
       shell:
-        cmd: qmgmt volume config import OracleCloud-persistent /tmp/oracle-persistent.cfg
-
-    - name: Copy volume config for scracth storage
-      copy:
-        src: templates/oracle-ephemeral-scratch.cfg
-        dest: /tmp/
-
-    - name: Import volume config for persistent storage
-      shell:
-        cmd: qmgmt volume config import OracleCloud-ephemeral-scratch /tmp/oracle-ephemeral-scratch.cfg
-
-    - name: Create sample volumes
-      shell:
-        cmd: qmgmt volume create demo-scratch root root OracleCloud-ephemeral-scratch 0777
-
-    - name: Create sample volumes
-      shell:
-        cmd: qmgmt volume create demo-persistent root root OracleCloud-persistent 0777
+        cmd: qmgmt policy-rule import /tmp/policies

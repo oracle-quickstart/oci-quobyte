@@ -38,7 +38,7 @@
       failed_when: "'ERROR' in command_result.stderr"
       ignore_errors: yes
 
-    - name: Remove packages Centos
+    - name: Remove packages
       yum:
         name: "{{ packages }}"
         state: absent
@@ -50,26 +50,8 @@
         - netdata
         - quobyte-server
         - quobyte-client
-      when: ansible_distribution == 'CentOS' or ansible_distribution == 'Red Hat Enterprise Linux'
+        - quobyte-thirdparty-libraries
 
-    - name: Remove packages Ubuntu
-      apt:
-        name: "{{ packages }}"
-        state: absent
-      vars:
-        packages:
-        - openjdk-11-jre-headless
-        - numactl
-        - netdata
-        - postfix
-        - quobyte-server
-        - quobyte-client  
-      when: ansible_distribution == 'Debian' or ansible_distribution == 'Ubuntu'
-
-    - name: Uninstall quobyte
-      shell:
-        cmd: ~/install_quobyte uninstall -f
-      ignore_errors: yes
 
     - name: Unmount quobyte devices
       shell: umount -lf /var/lib/quobyte/mnt/inspector-*
@@ -89,9 +71,9 @@
         path: "{{ item }}"
         state: absent
       with_items:
-        - /var/lib/quobyte*
+        - /var/lib/quobyte
         - ~/.quobyte
-        - /opt/quobyte*
+        - /opt/quobyte
         - /usr/lib/systemd/system/quobyte*
         - /usr/bin/*quobyte*
         - /usr/sbin/*quobyte* 
@@ -103,6 +85,9 @@
         - /dev/disk/by-label/quobyte-dev
         - /etc/init.d/network-tune
         - /etc/systemd/system/network-tune.service
+        - /etc/yum.repos.d/quobyte.repo
+        - /var/cache/dnf/quobyte*
+        - /var/lib/quobyte/devices/quobyte-registry
       ignore_errors: yes
 
     - name:  Clean labeled devices
@@ -114,9 +99,3 @@
       shell: wipefs -af /dev/{{ item }}
       with_items:
         - "{{ f_quobyte_mountpoint }}"
-
-    - name:  Set tuned profile to balanced 
-      shell: tuned-adm profile balanced
-      register: command_result
-      failed_when: "'ERROR' in command_result.stderr"
-      ignore_errors: yes

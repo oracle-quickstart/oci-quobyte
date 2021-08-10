@@ -1,0 +1,80 @@
+policy_rule {
+  name: "persistent-block-storage"
+  description: "Metadata and data are stored on persistent block storage with no redundancy, data will be unavailable for short periods during updates"
+  creator: "installer"
+  enabled: true
+  scope {
+    volume {
+      label_pattern {
+        name_regex: "persistent"
+        value_regex: ""
+      }
+    }
+    files_operator: ALL_OF
+  }
+  policies {
+    metadata_replication {
+      replication_factor: 1
+    }
+    metadata_tag_based_placement {
+      required_tag: "cloud-persistent"
+      soften_tag_requirements: false
+    }
+    file_tag_based_placement {
+      required_tag: "cloud-persistent"
+      soften_tag_requirements: false
+    }
+    file_redundancy {
+      redundancy: REPLICATION
+    }
+    replication_redundancy_details {
+      file_structure {
+        block_size_bytes: 4096
+        object_size_bytes: 8388608
+        segment_size_bytes: 10737418240
+      }
+      distribution_schema {
+        data_stripe_count: 1
+        striping_method: OBJECT_LEVEL
+      }
+      replication_factor: 1
+    }
+  }
+}
+policy_rule {
+  name: "local-nvme"
+  description: ""
+  creator: "installer"
+  enabled: true
+  scope {
+    global: true
+  }
+  policies {
+    metadata_replication {
+      replication_factor: 3
+    }
+    metadata_tag_based_placement {
+      required_tag: "ssd"
+      soften_tag_requirements: false
+    }
+    file_tag_based_placement {
+      required_tag: "ssd"
+      soften_tag_requirements: false
+    }
+    file_redundancy {
+      redundancy: REPLICATION
+    }
+    replication_redundancy_details {
+      file_structure {
+        block_size_bytes: 4096
+        object_size_bytes: 8388608
+        segment_size_bytes: 10737418240
+      }
+      distribution_schema {
+        data_stripe_count: 1
+        striping_method: OBJECT_LEVEL
+      }
+      replication_factor: 3
+    }
+  }
+}
